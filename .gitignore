@@ -1,0 +1,22 @@
+.claude
+
+# Raw dataset (too large for GitHub, re-downloadable)
+pan12-sexual-predator-identification-training-corpus-2012-05-01/
+pan12-sexual-predator-identification-test-corpus-2012-05-21/
+
+# Processed data (regenerable via prepare_dataset.py)
+data/
+
+# Model checkpoints and outputs
+models/
+
+# CUDA keyring package
+cuda-keyring_1.1-1_all.deb
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/

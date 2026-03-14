@@ -1,0 +1,16 @@
+[
+  {
+    "conversation": "user1: hey whats up\nuser2: not much. who r u?\nuser1: just a friend lol. how old r u\nuser2: 14\nuser1: nice. u home alone?\nuser2: yeah parents r at work\nuser1: cool. do u have a webcam? would be fun to chat\nuser2: um idk\nuser1: come on it'll be our little secret",
+    "precomputed": {
+      "risk": "HIGH RISK",
+      "response": "SUSPICIOUS MESSAGES:\n- [user1: how old r u] — Immediate age solicitation from an unknown contact is a common grooming opener.\n- [user1: u home alone?] — Probing for parental absence to assess vulnerability and isolation opportunity.\n- [user1: do u have a webcam? would be fun to chat] — Soliciting private video contact escalates risk significantly.\n- [user1: come on it'll be our little secret] — Classic secrecy-enforcement tactic used to isolate the child.\n\nOVERALL ASSESSMENT: HIGH RISK\nEXPLANATION: The adult initiates contact with an unknown minor, immediately probes for age and isolation, then attempts to establish private video communication under a secrecy pact. This sequence closely matches documented grooming escalation patterns and warrants immediate attention."
+    }
+  },
+  {
+    "conversation": "alex: did you finish the homework for tomorrow?\nsam: yeah mostly. the math was hard\nalex: same lol. are you going to the game Friday?\nsam: probably yeah my parents are taking me\nalex: cool see you there",
+    "precomputed": {
+      "risk": "LOW RISK",
+      "response": "SUSPICIOUS MESSAGES:\n- None identified.\n\nOVERALL ASSESSMENT: LOW RISK\nEXPLANATION: The conversation is entirely age-appropriate and revolves around shared school activities and an upcoming sports event. Both participants reference parental involvement, and no boundary violations, isolation attempts, or inappropriate topics are present."
+    }
+  }
+]
