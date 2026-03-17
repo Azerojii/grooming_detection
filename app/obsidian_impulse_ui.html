@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IMPULSE Safety Intelligence | Command Center</title>
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        :root {
+            /* Color Palette */
+            --bg-main: #050A14;
+            --bg-surface: #0D1526;
+            --bg-surface-elevated: #162032;
+            --accent-primary: #6366F1;
+            --accent-primary-glow: rgba(99, 102, 241, 0.6);
+            --accent-secondary: #06B6D4;
+            --accent-secondary-glow: rgba(6, 182, 212, 0.4);
+            --danger: #EF4444;
+            --danger-bg: rgba(239, 68, 68, 0.15);
+            --warning: #F59E0B;
+            --safe: #10B981;
+            --text-primary: #F0F4FF;
+            --text-muted: #64748B;
+            --border-subtle: rgba(99, 179, 237, 0.12);
+            --border-focus: rgba(99, 179, 237, 0.3);
+            
+            /* Typography */
+            --font-sans: 'Inter', sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+            
+            /* Metrics */
+            --radius-lg: 16px;
+            --radius-md: 12px;
+            --radius-sm: 8px;
+            --spacing-xs: 4px;
+            --spacing-sm: 8px;
+            --spacing-md: 16px;
+            --spacing-lg: 24px;
+            --spacing-xl: 32px;
+            --transition-smooth: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background: var(--bg-main);
+            background-image: radial-gradient(circle at 50% 0%, rgba(99,102,241,0.05) 0%, transparent 50%),
+                              radial-gradient(circle at 100% 100%, rgba(6,182,212,0.03) 0%, transparent 50%);
+            color: var(--text-primary);
+            font-family: var(--font-sans);
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+
+        /* Animations */
+        @keyframes slideUpRise {
+            0% { opacity: 0; transform: translateY(30px); }
+            100% { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes pulseGlow {
+            0%, 100% { filter: drop-shadow(0 0 8px var(--accent-primary-glow)); }
+            50% { filter: drop-shadow(0 0 20px var(--accent-primary-glow)); }
+        }
+
+        @keyframes scanline {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
+
+        @keyframes ripple {
+            to { transform: scale(4); opacity: 0; }
+        }
+        
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+
+        /* Layout */
+        .app-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: var(--spacing-lg);
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-lg);
+        }
+
+        /* Header */
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: var(--spacing-md) 0;
+            border-bottom: 1px solid var(--border-subtle);
+            animation: slideUpRise 0.6s var(--transition-smooth) 0s both;
+            opacity: 0;
+        }
+
+        .brand-cluster {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-md);
+        }
+
+        .shield-icon {
+            width: 40px;
+            height: 40px;
+            color: var(--accent-primary);
+            animation: pulseGlow 3s ease-in-out infinite;
+        }
+
+        .brand-text h1 {
+            font-size: 28px;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            line-height: 1.1;
+        }
+
+        .brand-text h1 span {
+            color: var(--accent-primary);
+        }
+
+        .status-pill {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-muted);
+            margin-top: var(--spacing-xs);
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            background: var(--safe);
+            border-radius: 50%;
+            box-shadow: 0 0 8px var(--safe);
+            animation: blink 2s infinite;
+        }
+
+        .stats-cluster {
+            display: flex;
+            gap: var(--spacing-md);
+        }
+
+        .stat-chip {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-sm);
+            padding: var(--spacing-xs) var(--spacing-md);
+            font-family: var(--font-mono);
+            font-size: 12px;
+            color: var(--accent-secondary);
+        }
+
+        /* Main Grid */
+        main {
+            display: grid;
+            grid-template-columns: 4fr 6fr;
+            gap: var(--spacing-lg);
+        }
+
+        @media (max-width: 900px) {
+            main { grid-template-columns: 1fr; }
+        }
+
+        /* Cards */
+        .card {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-lg);
+            padding: var(--spacing-lg);
+            transition: transform var(--transition-smooth), box-shadow var(--transition-smooth);
+            opacity: 0;
+            animation: slideUpRise 0.6s var(--transition-smooth) forwards;
+        }
+
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+
+        /* Panels */
+        .panel-left { animation-delay: 0.1s; border-left: 4px solid var(--accent-primary); }
+        .panel-right { animation-delay: 0.2s; display: flex; flex-direction: column; }
+
+        .section-title {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: var(--text-muted);
+            margin-bottom: var(--spacing-md);
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-sm);
+            border-bottom: 1px solid rgba(99,102,241,0.2);
+            padding-bottom: var(--spacing-xs);
+        }
+
+        /* Input Area component */
+        .input-wrapper { display: flex; flex-direction: column; gap: var(--spacing-md); }
+        
+        .chat-textarea {
+            width: 100%;
+            height: 300px;
+            background: #0A1628;
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-md);
+            color: var(--text-primary);
+            font-family: var(--font-mono);
+            font-size: 14px;
+            padding: var(--spacing-md);
+            resize: none;
+            transition: all var(--transition-smooth);
+        }
+
+        .chat-textarea:focus {
+            outline: none;
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 15px var(--accent-primary-glow);
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: var(--bg-surface); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: var(--accent-primary); border-radius: 4px; }
+
+        .actions {
+            display: flex;
+            gap: var(--spacing-sm);
+        }
+
+        button {
+            cursor: pointer;
+            font-family: var(--font-sans);
+            font-size: 14px;
+            font-weight: 600;
+            border-radius: 10px;
+            padding: var(--spacing-sm) var(--spacing-lg);
+            transition: all var(--transition-smooth);
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .btn-clear {
+            background: transparent;
+            border: 1px solid #334155;
+            color: var(--text-muted);
+            flex: 1;
+        }
+
+        .btn-clear:hover {
+            color: var(--danger);
+            border-color: var(--danger);
+            background: rgba(239, 68, 68, 0.05);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #6366F1, #8B5CF6);
+            border: none;
+            color: white;
+            flex: 3;
+            box-shadow: 0 0 20px rgba(99, 102, 241, 0.4);
+        }
+
+        .btn-primary:hover {
+            transform: scale(1.02);
+            box-shadow: 0 0 30px rgba(99, 102, 241, 0.6);
+        }
+        
+        .btn-primary:active { transform: scale(0.98); }
+
+        .btn-loading .scanline {
+            position: absolute;
+            top: 0; left: 0; bottom: 0;
+            width: 30%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+            animation: scanline 1s linear infinite;
+        }
+        
+        /* Accordion */
+        .accordion { margin-top: var(--spacing-lg); }
+        .accordion-header {
+            display: flex; justify-content: space-between;
+            color: var(--text-muted); font-size: 13px; cursor: pointer;
+            padding: var(--spacing-sm) 0;
+            border-bottom: 1px solid var(--border-subtle);
+        }
+        .accordion-content {
+            display: none; padding-top: var(--spacing-sm); gap: var(--spacing-sm); flex-direction: column;
+        }
+        .accordion.open .accordion-content { display: flex; }
+        .accordion.open .chevron { transform: rotate(180deg); }
+        
+        .example-chip {
+            background: var(--bg-surface-elevated);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-sm);
+            padding: var(--spacing-sm) var(--spacing-md);
+            font-size: 13px;
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: all var(--transition-smooth);
+        }
+        .example-chip:hover {
+            border-color: var(--accent-primary);
+            color: var(--text-primary);
+        }
+
+        /* Tabs System */
+        .tabs-header {
+            display: flex;
+            gap: var(--spacing-sm);
+            margin-bottom: var(--spacing-lg);
+            border-bottom: 1px solid var(--border-subtle);
+        }
+
+        .tab-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            padding: var(--spacing-sm) var(--spacing-md);
+            border-bottom: 2px solid transparent;
+            border-radius: 4px 4px 0 0;
+            font-size: 14px;
+        }
+
+        .tab-btn:hover { background: rgba(255,255,255,0.02); color: var(--text-primary); }
+
+        .tab-btn.active {
+            background: rgba(99, 102, 241, 0.15);
+            border-bottom-color: var(--accent-primary);
+            color: var(--text-primary);
+        }
+
+        .tab-content { display: none; flex: 1; flex-direction: column; }
+        .tab-content.active { display: flex; animation: slideUpRise 0.4s var(--transition-smooth); }
+
+        /* Dashboard specific */
+        .empty-state {
+            margin: auto; text-align: center; color: var(--text-muted); font-style: italic; opacity: 0.6;
+            display: flex; flex-direction: column; align-items: center; gap: 10px; flex: 1; justify-content: center;
+        }
+
+        /* Gauge Area */
+        .gauge-container {
+            position: relative;
+            width: 250px; height: 150px; margin: 0 auto var(--spacing-lg) auto;
+            text-align: center;
+        }
+        .gauge-text {
+            position: absolute; bottom: 10px; width: 100%; text-align: center;
+        }
+        .gauge-value { font-size: 48px; font-weight: 800; line-height: 1; color: var(--danger); text-shadow: 0 0 15px var(--danger-bg); }
+        .gauge-label { font-size: 11px; letter-spacing: 2px; color: var(--text-muted); margin-top: 4px; }
+        
+        .metrics-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: var(--spacing-md); margin-bottom: var(--spacing-lg); }
+        .metric-card {
+            background: var(--bg-surface-elevated);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-md);
+            padding: var(--spacing-md);
+            text-align: center;
+        }
+        .metric-card.danger { border-color: var(--danger); box-shadow: inset 0 0 20px rgba(239,68,68,0.05); }
+        .metric-val { font-size: 24px; font-weight: 700; color: var(--text-primary); }
+        .metric-val.danger { color: var(--danger); }
+        .metric-lbl { font-size: 11px; text-transform: uppercase; color: var(--text-muted); margin-top: 4px; }
+
+        .analysis-summary {
+            background: var(--danger-bg);
+            border-left: 4px solid var(--danger);
+            padding: var(--spacing-md);
+            border-radius: var(--radius-sm);
+            font-size: 14px;
+        }
+
+        /* Chat bubbles */
+        .chat-container { display: flex; flex-direction: column; gap: var(--spacing-md); overflow-y: auto; max-height: 500px; padding-right: 10px; }
+        .chat-bubble { max-width: 80%; padding: 12px 16px; border-radius: 12px; font-size: 14px; line-height: 1.5; color: var(--text-primary); }
+        .chat-bubble.left { align-self: flex-start; background: var(--bg-surface-elevated); border-bottom-left-radius: 4px; }
+        .chat-bubble.right { align-self: flex-end; background: rgba(99, 102, 241, 0.15); border-bottom-right-radius: 4px; }
+        
+        .chat-bubble.flagged {
+            background: var(--danger-bg);
+            border: 1px solid rgba(239,68,68,0.3);
+            border-left: 4px solid var(--danger);
+            position: relative;
+        }
+        .flagged-text { background: rgba(239, 68, 68, 0.3); padding: 0 4px; border-bottom: 1px dotted var(--danger); }
+        .chat-speaker { font-size: 11px; color: var(--text-muted); margin-bottom: 4px; display: block; font-weight: 600; }
+
+        /* Terminal Tab */
+        .terminal {
+            background: #050A14;
+            border-radius: var(--radius-md);
+            padding: var(--spacing-lg);
+            font-family: var(--font-mono);
+            font-size: 13px;
+            border: 1px solid #1e293b;
+            flex: 1;
+            box-shadow: inset 0 0 30px rgba(0,0,0,0.8);
+            position: relative;
+            overflow: hidden;
+        }
+        .terminal::after {
+            content: ""; position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            background-size: 100% 4px, 3px 100%; pointer-events: none;
+        }
+        .log-line { margin-bottom: 6px; }
+        .log-time { color: var(--text-muted); margin-right: 12px; }
+        .log-info { color: var(--accent-secondary); }
+        .log-success { color: var(--safe); }
+        .log-warn { color: var(--warning); }
+        .log-danger { color: var(--danger); }
+    </style>
+</head>
+<body>
+
+<div class="app-container">
+    <!-- Header -->
+    <header>
+        <div class="brand-cluster">
+            <svg class="shield-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/>
+            </svg>
+            <div class="brand-text">
+                <h1>IMPULSE <span>Safety Intelligence</span></h1>
+                <div class="status-pill">
+                    <span class="status-dot"></span> System Active · Secure Mode
+                </div>
+            </div>
+        </div>
+        <div class="stats-cluster">
+            <div class="stat-chip">Patterns Loaded: 847</div>
+            <div class="stat-chip">Avg Analysis: 1.2s</div>
+            <div class="stat-chip">Sessions Today: 42</div>
+        </div>
+    </header>
+
+    <!-- Main Workspace Grid -->
+    <main>
+        <!-- Left Panel: Input -->
+        <div class="card panel-left">
+            <div class="section-title">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect></svg>
+                Analyze Conversation
+            </div>
+            
+            <div class="input-wrapper">
+                <textarea class="chat-textarea" id="chatInput" placeholder="Paste chat logs here... (format:  username: message)&#10;&#10;alice: hey how old are you?&#10;bob: im 13&#10;alice: cool, are you home alone?"></textarea>
+                
+                <div class="actions">
+                    <button class="btn-clear" id="clearBtn">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                        Clear
+                    </button>
+                    <button class="btn-primary" id="analyzeBtn">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path></svg>
+                        <span id="btnText">Analyze Risk</span>
+                        <div class="scanline" style="display:none;" id="btnScanline"></div>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Example Datasets Accordion -->
+            <div class="accordion" id="exampleAccordion">
+                <div class="accordion-header" id="accordionToggle">
+                    <span>📚 Example Datasets</span>
+                    <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="transition:0.3s;"><path d="M6 9l6 6 6-6"></path></svg>
+                </div>
+                <div class="accordion-content">
+                    <div class="example-chip" onclick="loadExample(1)">Test Case A: Grooming Indicators detected...</div>
+                    <div class="example-chip" onclick="loadExample(2)">Test Case B: Safe standard conversation...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Panel: Results -->
+        <div class="card panel-right">
+            <div class="tabs-header">
+                <button class="tab-btn active" data-target="tab-summary">📋 Executive Summary</button>
+                <button class="tab-btn" data-target="tab-highlights">💬 Conversation Highlights</button>
+                <button class="tab-btn" data-target="tab-tech">⚙️ Technical Logs</button>
+            </div>
+
+            <!-- Default Empty State -->
+            <div id="emptyResults" class="empty-state">
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#334155" stroke-width="1.5"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
+                Awaiting data to analyze...
+            </div>
+
+            <!-- Tab: Summary -->
+            <div class="tab-content" id="tab-summary">
+                <div class="gauge-container">
+                    <svg viewBox="0 0 100 50" class="gauge-svg">
+                        <defs>
+                            <linearGradient id="gaugeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                                <stop offset="0%" stop-color="var(--safe)" />
+                                <stop offset="50%" stop-color="var(--warning)" />
+                                <stop offset="100%" stop-color="var(--danger)" />
+                            </linearGradient>
+                        </defs>
+                        <!-- Arc background -->
+                        <path d="M 10 50 A 40 40 0 0 1 90 50" fill="none" stroke="#1E293B" stroke-width="10" stroke-linecap="round" />
+                        <!-- Arc animated foreground -->
+                        <path id="gaugeArc" d="M 10 50 A 40 40 0 0 1 90 50" fill="none" stroke="url(#gaugeGrad)" stroke-width="10" stroke-linecap="round" stroke-dasharray="125.6" stroke-dashoffset="125.6" style="transition: stroke-dashoffset 1.2s cubic-bezier(0.4, 0, 0.2, 1);" />
+                        <!-- Needle -->
+                        <polygon id="gaugeNeedle" points="48,50 52,50 50,20" fill="#F0F4FF" style="transform-origin: 50px 50px; transform: rotate(-90deg); transition: transform 1.2s cubic-bezier(0.4, 0, 0.2, 1);" />
+                    </svg>
+                    <div class="gauge-text">
+                        <div class="gauge-value" id="gaugeNumber">0</div>
+                        <div class="gauge-label">RISK SCORE</div>
+                    </div>
+                </div>
+
+                <div class="metrics-row">
+                    <div class="metric-card danger">
+                        <div class="metric-val danger">HIGH</div>
+                        <div class="metric-lbl">Risk Level</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-val">4</div>
+                        <div class="metric-lbl">Patterns Detected</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-val">97.4%</div>
+                        <div class="metric-lbl">Confidence</div>
+                    </div>
+                </div>
+
+                <div class="analysis-summary">
+                    <strong>Critical Alert:</strong> This conversation exhibits multiple high-risk predatory behavior patterns. Indicators include isolation checks ("are you home alone?"), secrecy enforcement ("our little secret"), and aggressive age probing. The probabilistic model marks this as a distinct threat targeting a minor.
+                </div>
+            </div>
+
+            <!-- Tab: Highlights -->
+            <div class="tab-content" id="tab-highlights">
+                <div class="chat-container">
+                    <div class="chat-bubble left">
+                        <span class="chat-speaker">alice:</span>
+                        hey how old are you?
+                    </div>
+                    <div class="chat-bubble right">
+                        <span class="chat-speaker">bob:</span>
+                        im 13
+                    </div>
+                    <div class="chat-bubble left flagged" title="Pattern: Isolation Check & Age Grooming">
+                        <span class="chat-speaker">alice:</span>
+                        cool, <span class="flagged-text">are you home alone?</span> ⚠️
+                    </div>
+                    <div class="chat-bubble right">
+                        <span class="chat-speaker">bob:</span>
+                        yeah parents r at work
+                    </div>
+                    <div class="chat-bubble left flagged" title="Pattern: Secrecy Enforcement">
+                        <span class="chat-speaker">alice:</span>
+                        do u have a webcam? <span class="flagged-text">it'll be our little secret</span> ⚠️
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab: Technical Logs -->
+            <div class="tab-content" id="tab-tech">
+                <div class="terminal">
+                    <div class="log-line"><span class="log-time">[14:02:01.034]</span><span class="log-info">SYSTEM:</span> Initializing TF-IDF + Logistic Regression pipeline...</div>
+                    <div class="log-line"><span class="log-time">[14:02:01.100]</span><span class="log-success">SUCCESS:</span> Pipeline loaded (max_features=50k, ngram_range=(1,3)).</div>
+                    <div class="log-line"><span class="log-time">[14:02:03.412]</span><span class="log-info">ANALYSIS:</span> Parsing input sequence (124 tokens)...</div>
+                    <div class="log-line"><span class="log-time">[14:02:03.415]</span><span class="log-warn">PATTERN MATCH:</span> Isolation check detected @ line 3.</div>
+                    <div class="log-line"><span class="log-time">[14:02:03.418]</span><span class="log-warn">PATTERN MATCH:</span> Secrecy enforcement detected @ line 5.</div>
+                    <div class="log-line"><span class="log-time">[14:02:03.450]</span><span class="log-danger">CLASSIFIER:</span> Grooming likelihood computed at 0.9743.</div>
+                    <div class="log-line"><span class="log-time">[14:02:03.451]</span><span class="log-success">SUCCESS:</span> Response payload constructed.</div>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<script>
+    // Tab Logic
+    const tabBtns = document.querySelectorAll('.tab-btn');
+    const tabContents = document.querySelectorAll('.tab-content');
+    const emptyState = document.getElementById('emptyResults');
+
+    tabBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            if(emptyState.style.display !== 'none') return; // disabled if empty
+            
+            tabBtns.forEach(b => b.classList.remove('active'));
+            tabContents.forEach(c => c.classList.remove('active'));
+            
+            btn.classList.add('active');
+            document.getElementById(btn.dataset.target).classList.add('active');
+        });
+    });
+
+    // Accordion
+    const accordionToggle = document.getElementById('accordionToggle');
+    const accordion = document.getElementById('exampleAccordion');
+    accordionToggle.addEventListener('click', () => {
+        accordion.classList.toggle('open');
+    });
+
+    // Load Examples
+    function loadExample(id) {
+        accordion.classList.remove('open');
+        const text = id === 1 
+            ? "alice: hey whats up\nbob: not much. who r u?\nalice: just a friend lol. how old r u\nbob: 14\nalice: nice. u home alone?\nbob: yeah parents r at work\nalice: cool. do u have a webcam? would be fun to chat\nbob: um idk\nalice: come on it'll be our little secret"
+            : "userA: hey did u do the math homework?\nuserB: yeah it was hard\nuserA: can u send me the answers?\nuserB: no do it yourself lazy";
+        document.getElementById('chatInput').value = text;
+    }
+
+    // Clear Button
+    document.getElementById('clearBtn').addEventListener('click', () => {
+        document.getElementById('chatInput').value = '';
+        emptyState.style.display = 'flex';
+        tabContents.forEach(c => c.classList.remove('active'));
+        document.querySelector('[data-target="tab-summary"]').click();
+        
+        // Reset Gauge
+        document.getElementById('gaugeArc').style.strokeDashoffset = 125.6;
+        document.getElementById('gaugeNeedle').style.transform = `rotate(-90deg)`;
+        document.getElementById('gaugeNumber').innerText = "0";
+    });
+
+    // Analyze Button & Logic Simulation
+    document.getElementById('analyzeBtn').addEventListener('click', function(e) {
+        const input = document.getElementById('chatInput').value.trim();
+        if(!input) return;
+
+        // Ripple Effect
+        let ripple = document.createElement('span');
+        ripple.style.position = 'absolute';
+        ripple.style.background = 'rgba(255,255,255,0.4)';
+        ripple.style.borderRadius = '50%';
+        ripple.style.pointerEvents = 'none';
+        ripple.style.width = '100px';
+        ripple.style.height = '100px';
+        ripple.style.left = e.clientX - e.target.getBoundingClientRect().left - 50 + 'px';
+        ripple.style.top = e.clientY - e.target.getBoundingClientRect().top - 50 + 'px';
+        ripple.style.animation = 'ripple 0.6s linear';
+        this.appendChild(ripple);
+        setTimeout(() => ripple.remove(), 600);
+
+        // Simulation State
+        const btnText = document.getElementById('btnText');
+        const scanline = document.getElementById('btnScanline');
+        btnText.innerText = "Analyzing...";
+        scanline.style.display = "block";
+        this.classList.add('btn-loading');
+
+        setTimeout(() => {
+            // Restore button
+            btnText.innerText = "Analyze Risk";
+            scanline.style.display = "none";
+            this.classList.remove('btn-loading');
+
+            // Show results
+            emptyState.style.display = 'none';
+            document.querySelector('[data-target="tab-summary"]').click();
+
+            // Gauge Animation Calculation
+            // For demo: set to 87 score
+            const score = 87;
+            const dashArray = 125.6; 
+            const offset = dashArray - (dashArray * (score / 100));
+            const angle = -90 + (180 * (score / 100));
+
+            // Animate Gauge Draw
+            setTimeout(() => {
+                document.getElementById('gaugeArc').style.strokeDashoffset = offset;
+                document.getElementById('gaugeNeedle').style.transform = `rotate(${angle}deg)`;
+                
+                // Number count up
+                let current = 0;
+                let step = score / 30; // approx 60fps over 0.5s
+                let int = setInterval(() => {
+                    current += step;
+                    if(current >= score) {
+                        current = score;
+                        clearInterval(int);
+                    }
+                    document.getElementById('gaugeNumber').innerText = Math.floor(current);
+                }, 16);
+            }, 100);
+
+        }, 1200); // 1.2s API delay simulation
+    });
+</script>
+
+</body>
+</html>

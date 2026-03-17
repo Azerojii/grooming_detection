@@ -1,18 +1,15 @@
 """
 evaluate.py
-Evaluate the fine-tuned model against the PAN-2012 test set.
+Evaluate the TF-IDF + LogReg classifier against the PAN-2012 test set.
 
 Usage:
-    python scripts/evaluate.py                   # auto-detect latest checkpoint
-    python scripts/evaluate.py --checkpoint 3000 # specific checkpoint
-    python scripts/evaluate.py --limit 200       # cap conversations (faster smoke-test)
-
-Outputs:
-    Precision, Recall, F1, Accuracy at the conversation level.
-    Prints a confusion matrix and per-class breakdown.
+    python scripts/evaluate.py                   # full test set
+    python scripts/evaluate.py --limit 500       # quick smoke-test
+    python scripts/evaluate.py --threshold 0.5   # custom decision threshold
 """
 
 import argparse
+import pickle
 import re
 import sys
 from pathlib import Path
@@ -35,150 +32,45 @@ GROUNDTRUTH_TXT = (
     / "pan12-sexual-predator-identification-test-corpus-2012-05-21"
     / "pan12-sexual-predator-identification-groundtruth-problem1.txt"
 )
-LORA_ADAPTER_DIR = BASE / "models" / "lora_adapter"
-MERGED_DIR = BASE / "models" / "merged"
-FALLBACK_BASE_MODEL = "Qwen/Qwen3.5-0.8B"
+CLASSIFIER_PATH = BASE / "models" / "classifier" / "tfidf_logreg.pkl"
 
 # ---------------------------------------------------------------------------
-# Same sliding-window config as training
+# Sliding window config (same as training)
 # ---------------------------------------------------------------------------
 CONTEXT_WINDOW = 10
 STRIDE = 5
 
-SYSTEM_PROMPT = (
-    "You are a child safety AI assistant trained to detect grooming behavior "
-    "in online conversations. Analyze conversations carefully and identify "
-    "manipulation tactics, boundary violations, age-inappropriate content, "
-    "trust-building patterns, isolation attempts, and any other indicators of "
-    "predatory behavior targeting minors."
-)
-
-ANALYSIS_PROMPT = (
-    "Analyze the following conversation excerpt for signs of child grooming "
-    "or sexual predatory behavior. Consider manipulation tactics, boundary "
-    "violations, age-inappropriate content, and trust-building patterns.\n\n"
-    "<conversation>\n{conversation}\n</conversation>\n\n"
-    "Respond with exactly one line:\n"
-    "VERDICT: HIGH RISK or VERDICT: LOW RISK"
-)
+_HEX_ID_RE = re.compile(r"\b[0-9a-f]{20,}\b")
 
 
-# ---------------------------------------------------------------------------
-# Model loading
-# ---------------------------------------------------------------------------
+def _anonymize(text: str) -> str:
+    seen = {}
+    counter = [0]
 
-def find_latest_checkpoint(adapter_dir: Path) -> Path | None:
-    checkpoints = sorted(
-        [d for d in adapter_dir.iterdir() if d.is_dir() and d.name.startswith("checkpoint-")],
-        key=lambda p: int(p.name.split("-")[1]),
-    )
-    return checkpoints[-1] if checkpoints else None
+    def _replace(m):
+        uid = m.group(0)
+        if uid not in seen:
+            seen[uid] = f"user_{chr(65 + counter[0])}"
+            counter[0] += 1
+        return seen[uid]
 
-
-def load_model(checkpoint_num: int | None):
-    import torch
-    from transformers import AutoModelForCausalLM, AutoTokenizer
-    from peft import PeftModel
-
-    device = "cuda" if __import__("torch").cuda.is_available() else "cpu"
-
-    # Determine model path
-    if MERGED_DIR.exists() and (MERGED_DIR / "config.json").exists():
-        print(f"[+] Using merged model: {MERGED_DIR}")
-        tokenizer = AutoTokenizer.from_pretrained(str(MERGED_DIR))
-        model = AutoModelForCausalLM.from_pretrained(
-            str(MERGED_DIR),
-            torch_dtype=torch.bfloat16 if device == "cuda" else torch.float32,
-            device_map="auto",
-        )
-    else:
-        if checkpoint_num is not None:
-            ckpt_path = LORA_ADAPTER_DIR / f"checkpoint-{checkpoint_num}"
-            if not ckpt_path.exists():
-                sys.exit(f"[!] Checkpoint not found: {ckpt_path}")
-        else:
-            ckpt_path = find_latest_checkpoint(LORA_ADAPTER_DIR)
-            if ckpt_path is None:
-                print(f"[!] No checkpoints found. Using base model: {FALLBACK_BASE_MODEL}")
-                ckpt_path = None
-
-        if ckpt_path is not None:
-            print(f"[+] Using LoRA adapter: {ckpt_path}")
-            tokenizer = AutoTokenizer.from_pretrained(FALLBACK_BASE_MODEL)
-            base = AutoModelForCausalLM.from_pretrained(
-                FALLBACK_BASE_MODEL,
-                torch_dtype=torch.bfloat16 if device == "cuda" else torch.float32,
-                device_map="auto",
-            )
-            model = PeftModel.from_pretrained(base, str(ckpt_path))
-        else:
-            tokenizer = AutoTokenizer.from_pretrained(FALLBACK_BASE_MODEL)
-            model = AutoModelForCausalLM.from_pretrained(
-                FALLBACK_BASE_MODEL,
-                torch_dtype=torch.bfloat16 if device == "cuda" else torch.float32,
-                device_map="auto",
-            )
-
-    model.eval()
-    print(f"[+] Model ready on {device}.")
-    return model, tokenizer, device
+    return _HEX_ID_RE.sub(_replace, text)
 
 
 # ---------------------------------------------------------------------------
-# Inference
+# Classifier loading
 # ---------------------------------------------------------------------------
 
-def predict_window(model, tokenizer, device, conversation_text: str) -> str:
-    """Returns 'HIGH' or 'LOW' for a single window."""
-    import torch
-
-    messages = [
-        {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": ANALYSIS_PROMPT.format(conversation=conversation_text)},
-    ]
-    text = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
-    inputs = tokenizer(text, return_tensors="pt").to(device)
-    with torch.no_grad():
-        outputs = model.generate(
-            **inputs,
-            max_new_tokens=32,
-            temperature=0.1,
-            do_sample=True,
-            top_p=0.9,
-            pad_token_id=tokenizer.eos_token_id,
-        )
-    generated = outputs[0][inputs["input_ids"].shape[1]:]
-    response = tokenizer.decode(generated, skip_special_tokens=True).upper()
-    return "HIGH" if "HIGH" in response else "LOW"
-
-
-def predict_conversation(model, tokenizer, device, messages: list[dict]) -> str:
-    """
-    Slide a window over the conversation, aggregate window votes.
-    Returns 'HIGH' if any window votes HIGH (conservative for safety).
-    """
-    high_votes = 0
-    total_windows = 0
-
-    for start in range(0, len(messages), STRIDE):
-        window = messages[start: start + CONTEXT_WINDOW]
-        if len(window) < 2:
-            continue
-        lines = [f"{m['author']}: {m['text']}" for m in window]
-        conv_text = "\n".join(lines)
-        verdict = predict_window(model, tokenizer, device, conv_text)
-        total_windows += 1
-        if verdict == "HIGH":
-            high_votes += 1
-
-    # Flag as grooming if >30% of windows vote HIGH
-    if total_windows == 0:
-        return "LOW"
-    return "HIGH" if (high_votes / total_windows) >= 0.3 else "LOW"
+def load_classifier(path: Path):
+    print(f"[+] Loading classifier from {path} ...")
+    with open(path, "rb") as f:
+        pipeline = pickle.load(f)
+    print("[+] Classifier loaded.")
+    return pipeline
 
 
 # ---------------------------------------------------------------------------
-# Data loading
+# Data loading (reused from original)
 # ---------------------------------------------------------------------------
 
 def load_groundtruth(path: Path) -> set[str]:
@@ -193,7 +85,6 @@ def load_groundtruth(path: Path) -> set[str]:
 
 
 def load_test_conversations(xml_path: Path, limit: int | None) -> list[dict]:
-    """Returns list of {conv_id, messages, authors}."""
     conversations = []
     print(f"[+] Parsing test XML: {xml_path} ...")
     context = etree.iterparse(str(xml_path), events=("end",), tag="conversation")
@@ -219,7 +110,32 @@ def load_test_conversations(xml_path: Path, limit: int | None) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
-# Metrics
+# Inference
+# ---------------------------------------------------------------------------
+
+def predict_conversation(pipeline, messages: list[dict], threshold: float) -> tuple[int, float]:
+    """
+    Slide windows over the conversation, take max grooming probability.
+    Returns (prediction, max_probability).
+    """
+    max_prob = 0.0
+
+    for start in range(0, len(messages), STRIDE):
+        window = messages[start: start + CONTEXT_WINDOW]
+        if len(window) < 2:
+            continue
+        lines = [f"{m['author']}: {m['text']}" for m in window]
+        conv_text = _anonymize("\n".join(lines))
+        proba = pipeline.predict_proba([conv_text])[0]
+        grooming_prob = proba[1]
+        if grooming_prob > max_prob:
+            max_prob = grooming_prob
+
+    return (1 if max_prob >= threshold else 0), max_prob
+
+
+# ---------------------------------------------------------------------------
+# Metrics (reused from original)
 # ---------------------------------------------------------------------------
 
 def compute_metrics(y_true: list[int], y_pred: list[int]) -> dict:
@@ -259,34 +175,36 @@ def print_results(metrics: dict, total: int):
 # ---------------------------------------------------------------------------
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Evaluate IMPULSE model on PAN-2012 test set.")
-    parser.add_argument("--checkpoint", type=int, default=None,
-                        help="Checkpoint number to use (e.g. 3200). Defaults to latest.")
+    parser = argparse.ArgumentParser(description="Evaluate IMPULSE classifier on PAN-2012 test set.")
     parser.add_argument("--limit", type=int, default=None,
                         help="Max conversations to evaluate (for quick smoke-tests).")
+    parser.add_argument("--threshold", type=float, default=0.5,
+                        help="Decision threshold for grooming classification (default: 0.5).")
     return parser.parse_args()
 
 
 if __name__ == "__main__":
     args = parse_args()
 
+    if not CLASSIFIER_PATH.exists():
+        sys.exit("[!] Classifier not found. Run: python scripts/train_classifier.py")
+
     groundtruth = load_groundtruth(GROUNDTRUTH_TXT)
     conversations = load_test_conversations(TEST_XML, args.limit)
-    model, tokenizer, device = load_model(args.checkpoint)
+    pipeline = load_classifier(CLASSIFIER_PATH)
 
     y_true, y_pred = [], []
     total = len(conversations)
 
-    print(f"\n[+] Running inference on {total} conversations ...\n")
+    print(f"\n[+] Running inference on {total} conversations (threshold={args.threshold}) ...\n")
     for i, conv in enumerate(conversations, 1):
-        # Ground truth: any author in this conversation is a known predator
         is_predator = bool(conv["authors"] & groundtruth)
         y_true.append(1 if is_predator else 0)
 
-        prediction = predict_conversation(model, tokenizer, device, conv["messages"])
-        y_pred.append(1 if prediction == "HIGH" else 0)
+        pred, prob = predict_conversation(pipeline, conv["messages"], args.threshold)
+        y_pred.append(pred)
 
-        if i % 50 == 0 or i == total:
+        if i % 500 == 0 or i == total:
             done = sum(1 for t, p in zip(y_true, y_pred) if t == p)
             print(f"  [{i}/{total}] running accuracy: {done/i:.3f}")
 
